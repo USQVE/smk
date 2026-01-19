@@ -1,0 +1,6 @@
+# CS2 Smoke Simulator Dependencies
+pybullet>=3.2.5
+trimesh>=4.0.0
+numpy>=1.24.0
+flask>=3.0.0
+flask-cors>=4.0.0

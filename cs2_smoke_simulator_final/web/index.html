@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CS2 Smoke Finder - Панель управления</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: 'Courier New', monospace; 
+            background: #0a0e14; 
+            color: #e8edf5; 
+            padding: 20px; 
+        }
+        .container { max-width: 800px; margin: 0 auto; }
+        .header { 
+            text-align: center; 
+            margin-bottom: 30px; 
+            padding-bottom: 15px;
+            border-bottom: 2px solid #00ff7a;
+        }
+        h1 { color: #00ff7a; margin-bottom: 10px; }
+        .panel { 
+            background: #12151b; 
+            padding: 20px; 
+            border-radius: 8px;
+            border: 1px solid rgba(0, 255, 122, 0.2);
+            margin-bottom: 20px;
+        }
+        .input-group { margin-bottom: 15px; }
+        label { 
+            display: block; 
+            margin-bottom: 8px; 
+            color: #8b949e; 
+            font-size: 14px; 
+        }
+        input, select, button {
+            width: 100%;
+            padding: 10px;
+            background: #1a1f29;
+            border: 1px solid rgba(0, 255, 122, 0.2);
+            border-radius: 4px;
+            color: #e8edf5;
+            font-family: inherit;
+        }
+        button {
+            background: #00ff7a;
+            color: #000;
+            border: none;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        button:hover { opacity: 0.9; }
+        .result {
+            background: #1a1f29;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 20px;
+            font-size: 13px;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .log { 
+            background: #000; 
+            padding: 10px; 
+            margin-top: 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>⚙️ CS2 Smoke Finder - Панель управления</h1>
+            <p>Управление поиском смоков через Python бэкенд</p>
+        </div>
+
+        <div class="panel">
+            <h3>🎯 Параметры поиска</h3>
+            <div class="input-group">
+                <label>Целевая позиция (X, Y, Z):</label>
+                <input type="text" id="targetPos" value="15, 10, 0">
+            </div>
+            <div class="input-group">
+                <label>Тип броска:</label>
+                <select id="throwType">
+                    <option value="LEFT_CLICK">ЛКМ (сильный)</option>
+                    <option value="BOTH_CLICKS">Оба клика (средний)</option>
+                    <option value="RIGHT_CLICK">ПКМ (слабый)</option>
+                </select>
+            </div>
+            <div class="input-group">
+                <label>Стратегия поиска:</label>
+                <select id="strategy">
+                    <option value="GRID_SEARCH">Сеточный поиск</option>
+                    <option value="GENETIC" selected>Генетический алгоритм</option>
+                    <option value="HYBRID">Гибридный</option>
+                </select>
+            </div>
+            <button id="findBtn">🔍 Начать поиск смоков</button>
+        </div>
+
+        <div class="panel">
+            <h3>📊 Результаты</h3>
+            <div class="result" id="result">
+                Нажмите "Начать поиск" чтобы увидеть результаты...
+            </div>
+        </div>
+
+        <div class="panel">
+            <h3>📝 Лог выполнения</h3>
+            <div class="log" id="log"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:5000';  // Flask сервер
+        
+        function addLog(message) {
+            const log = document.getElementById('log');
+            log.innerHTML += `[${new Date().toLocaleTimeString()}] ${message}\n`;
+            log.scrollTop = log.scrollHeight;
+        }
+
+        async function findSmokes() {
+            const targetPos = document.getElementById('targetPos').value;
+            const throwType = document.getElementById('throwType').value;
+            const strategy = document.getElementById('strategy').value;
+            
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = '⏳ Идет поиск...';
+            
+            try {
+                addLog(`Поиск смоков для цели: ${targetPos}`);
+                
+                // Отправляем запрос на Flask сервер
+                const response = await fetch(`${API_URL}/find_smokes`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        target_pos: targetPos.split(',').map(Number),
+                        throw_type: throwType,
+                        strategy: strategy
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.smokes && data.smokes.length > 0) {
+                    let html = `✅ Найдено ${data.smokes.length} смоков:\n\n`;
+                    
+                    data.smokes.forEach((smoke, index) => {
+                        html += `🎯 Смок #${index + 1}:\n`;
+                        html += `   • Точность: ${smoke.accuracy.toFixed(2)}м\n`;
+                        html += `   • Позиция: [${smoke.throw_position.map(v => v.toFixed(1)).join(', ')}]\n`;
+                        html += `   • Углы: Pitch=${smoke.angles.pitch.toFixed(1)}°, Yaw=${smoke.angles.yaw.toFixed(1)}°\n`;
+                        html += `   • Команда: ${smoke.cs2_commands?.combined || 'N/A'}\n\n`;
+                    });
+                    
+                    resultDiv.innerHTML = html;
+                    addLog(`Поиск завершен: найдено ${data.smokes.length} смоков`);
+                } else {
+                    resultDiv.innerHTML = '❌ Смоки не найдены';
+                    addLog('Смоки не найдены');
+                }
+                
+            } catch (error) {
+                resultDiv.innerHTML = `❌ Ошибка: ${error.message}`;
+                addLog(`Ошибка: ${error.message}`);
+                console.error('Error:', error);
+            }
+        }
+
+        // Инициализация
+        document.getElementById('findBtn').addEventListener('click', findSmokes);
+        addLog('Панель управления готова к работе');
+        addLog(`API сервер: ${API_URL}`);
+        
+        // Автопроверка сервера при загрузке
+        fetch(`${API_URL}/health`)
+            .then(res => res.ok ? addLog('✅ Сервер доступен') : addLog('⚠️ Сервер недоступен'))
+            .catch(() => addLog('❌ Не удалось подключиться к серверу'));
+    </script>
+</body>
+</html>
